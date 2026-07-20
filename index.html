@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中文／國文／台文系每日資訊站</title>
+    <!-- Tailwind 的 CDN 版本不需要安裝或建置工具，適合本專案的靜態首頁。 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-stone-50 text-stone-800">
+    <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <!-- 網站標題與用途說明。 -->
+      <header class="mb-8 border-b border-stone-200 pb-6">
+        <p class="mb-2 text-sm font-medium tracking-widest text-teal-700">DAILY STUDY NOTES</p>
+        <h1 class="text-3xl font-bold tracking-tight text-stone-900 sm:text-4xl">中文／國文／台文系每日資訊站</h1>
+        <p class="mt-3 max-w-2xl leading-7 text-stone-600">記下每天的閱讀與想法，也累積值得回看的論文、活動與新書資訊。</p>
+      </header>
+
+      <!-- 搜尋與篩選會同時套用到論文／消息和每日筆記。 -->
+      <section class="mb-8 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm" aria-label="搜尋與篩選">
+        <div class="grid gap-4 md:grid-cols-3">
+          <label class="block md:col-span-1">
+            <span class="mb-1.5 block text-sm font-medium text-stone-700">關鍵字搜尋</span>
+            <input id="search-input" type="search" placeholder="標題、內容、摘要或標籤" class="w-full rounded-lg border border-stone-300 px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100" />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-stone-700">領域</span>
+            <select id="department-filter" class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100">
+              <option value="">全部領域</option>
+              <option value="中文系">中文系</option>
+              <option value="國文系">國文系</option>
+              <option value="台文系">台文系</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-stone-700">標籤</span>
+            <!-- 選項會依目前兩份 JSON 資料自動建立。 -->
+            <select id="tag-filter" class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100">
+              <option value="">全部標籤</option>
+            </select>
+          </label>
+        </div>
+        <p id="filter-status" class="mt-3 text-sm text-stone-500" aria-live="polite"></p>
+      </section>
+
+      <div class="space-y-10">
+        <section aria-labelledby="papers-heading">
+          <div class="mb-4 flex items-end justify-between">
+            <div>
+              <p class="text-sm font-medium text-amber-700">自動追蹤（未來階段）</p>
+              <h2 id="papers-heading" class="text-2xl font-bold">📚 最新論文／消息</h2>
+            </div>
+            <span id="papers-count" class="text-sm text-stone-500"></span>
+          </div>
+          <!-- JavaScript 會把 papers.json 的內容放進這裡。 -->
+          <div id="papers-list" class="space-y-4" aria-live="polite"></div>
+        </section>
+
+        <section aria-labelledby="notes-heading">
+          <div class="mb-4 flex items-end justify-between">
+            <div>
+              <p class="text-sm font-medium text-teal-700">手動輸入</p>
+              <h2 id="notes-heading" class="text-2xl font-bold">📝 每日筆記</h2>
+            </div>
+            <span id="notes-count" class="text-sm text-stone-500"></span>
+          </div>
+          <!-- 此表單需透過 note_editor.py 開啟網站，才能把資料寫回 notes.json。 -->
+          <form id="note-form" class="mb-6 rounded-2xl border border-teal-200 bg-teal-50 p-5" aria-labelledby="note-form-heading">
+            <h3 id="note-form-heading" class="text-lg font-bold text-teal-950">新增今日筆記</h3>
+            <p class="mt-1 text-sm text-teal-800">內容、領域與標籤為必填；標籤請用逗號分隔，例如「詩經, 讀書筆記」。</p>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <label class="block md:col-span-2">
+                <span class="mb-1.5 block text-sm font-medium text-stone-700">標題（選填）</span>
+                <input id="note-title" name="title" type="text" maxlength="100" placeholder="例如：重讀〈關雎〉的感想" class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100" />
+              </label>
+              <label class="block md:col-span-2">
+                <span class="mb-1.5 block text-sm font-medium text-stone-700">筆記內容</span>
+                <textarea id="note-content" name="content" required rows="4" maxlength="2000" placeholder="今天讀了什麼、想到什麼？" class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"></textarea>
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-stone-700">領域</span>
+                <select id="note-department" name="department" required class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100">
+                  <option value="中文系">中文系</option>
+                  <option value="國文系">國文系</option>
+                  <option value="台文系">台文系</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-stone-700">標籤</span>
+                <input id="note-tags" name="tags" type="text" required maxlength="200" placeholder="例如：詩經, 讀書筆記" class="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100" />
+              </label>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <button id="note-submit" type="submit" class="rounded-lg bg-teal-700 px-4 py-2.5 font-bold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">儲存筆記</button>
+              <!-- 只有在編輯既有筆記時才顯示取消按鈕。 -->
+              <button id="cancel-edit" type="button" hidden class="rounded-lg border border-stone-300 bg-white px-4 py-2.5 font-bold text-stone-700 transition hover:bg-stone-100">取消編輯</button>
+              <p id="note-form-status" class="text-sm" aria-live="polite"></p>
+            </div>
+          </form>
+          <!-- JavaScript 會把 notes.json 的內容放進這裡。 -->
+          <div id="notes-list" class="space-y-4" aria-live="polite"></div>
+        </section>
+      </div>
+    </main>
+
+    <template id="tag-template"><span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600"></span></template>
+
+    <script>
+      // 將文字安全地放入頁面，避免資料內的文字被當成 HTML 執行。
+      function createTextElement(tagName, className, text) {
+        const element = document.createElement(tagName);
+        element.className = className;
+        element.textContent = text;
+        return element;
+      }
+
+      // 依指定的領域顯示不同底色，讓三個領域容易辨識。
+      function departmentClass(department) {
+        return {
+          中文系: 'bg-rose-100 text-rose-800',
+          國文系: 'bg-sky-100 text-sky-800',
+          台文系: 'bg-violet-100 text-violet-800'
+        }[department] || 'bg-stone-100 text-stone-700';
+      }
+
+      // 建立標籤群組，筆記和論文卡片都能共用。
+      function createTags(tags) {
+        const container = document.createElement('div');
+        container.className = 'mt-4 flex flex-wrap gap-2';
+        tags.forEach((tag) => {
+          const badge = document.getElementById('tag-template').content.firstElementChild.cloneNode(true);
+          badge.textContent = `# ${tag}`;
+          container.appendChild(badge);
+        });
+        return container;
+      }
+
+      // 建立一張每日筆記卡片。
+      function createNoteCard(note) {
+        const card = document.createElement('article');
+        card.className = 'rounded-2xl border border-stone-200 bg-white p-5 shadow-sm';
+        const meta = document.createElement('div');
+        meta.className = 'mb-3 flex flex-wrap items-center gap-2 text-sm';
+        meta.append(createTextElement('time', 'text-stone-500', note.date));
+        meta.append(createTextElement('span', `rounded-full px-2.5 py-1 text-xs font-bold ${departmentClass(note.department)}`, note.department));
+        card.append(meta, createTextElement('h3', 'text-lg font-bold text-stone-900', note.title || '未命名筆記'));
+        card.append(createTextElement('p', 'mt-2 leading-7 text-stone-600', note.content));
+        card.append(createTags(note.tags));
+        const actions = document.createElement('div');
+        actions.className = 'mt-4 flex items-center gap-3 border-t border-stone-100 pt-4';
+        const editButton = createTextElement('button', 'rounded-lg px-3 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal-50', '編輯');
+        editButton.type = 'button';
+        editButton.addEventListener('click', () => startEditing(note));
+        const deleteButton = createTextElement('button', 'rounded-lg px-3 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-50', '刪除');
+        deleteButton.type = 'button';
+        deleteButton.addEventListener('click', () => deleteNote(note));
+        actions.append(editButton, deleteButton);
+        card.append(actions);
+        return card;
+      }
+
+      // 建立一張論文或消息卡片。
+      function createPaperCard(paper) {
+        const card = document.createElement('article');
+        card.className = 'rounded-2xl border border-stone-200 bg-white p-5 shadow-sm';
+        const meta = document.createElement('div');
+        meta.className = 'mb-3 flex flex-wrap items-center gap-2 text-sm';
+        meta.append(createTextElement('span', 'font-medium text-amber-700', paper.type));
+        meta.append(createTextElement('time', 'text-stone-500', paper.date));
+        meta.append(createTextElement('span', `rounded-full px-2.5 py-1 text-xs font-bold ${departmentClass(paper.department)}`, paper.department));
+        card.append(meta, createTextElement('h3', 'text-lg font-bold text-stone-900', paper.title));
+        if (paper.authors.length) card.append(createTextElement('p', 'mt-2 text-sm text-stone-500', paper.authors.join('、')));
+        card.append(createTextElement('p', 'mt-3 leading-7 text-stone-600', paper.abstract));
+        card.append(createTags(paper.tags));
+        return card;
+      }
+
+      // 將讀取到的資料存起來，篩選條件改變時不必重新下載 JSON 檔。
+      let notesData = [];
+      let papersData = [];
+      let editingNoteId = null;
+
+      // 比對資料是否符合目前的搜尋字、領域與標籤條件。
+      function matchesFilters(item) {
+        const keyword = document.getElementById('search-input').value.trim().toLowerCase();
+        const department = document.getElementById('department-filter').value;
+        const tag = document.getElementById('tag-filter').value;
+        // 把可能包含關鍵字的欄位合併成一段文字，再進行不分大小寫的比對。
+        const searchableText = [item.title, item.content, item.abstract, ...(item.tags || []), ...(item.keywords || [])]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return (!keyword || searchableText.includes(keyword))
+          && (!department || item.department === department)
+          && (!tag || (item.tags || []).includes(tag) || (item.keywords || []).includes(tag));
+      }
+
+      // 依目前條件重新繪製兩個資料區塊。
+      function renderContent() {
+        const visibleNotes = notesData.filter(matchesFilters);
+        const visiblePapers = papersData.filter(matchesFilters);
+        const notesList = document.getElementById('notes-list');
+        const papersList = document.getElementById('papers-list');
+        notesList.replaceChildren();
+        papersList.replaceChildren();
+        visibleNotes.forEach((note) => notesList.appendChild(createNoteCard(note)));
+        visiblePapers.forEach((paper) => papersList.appendChild(createPaperCard(paper)));
+        if (!visibleNotes.length) notesList.appendChild(createTextElement('p', 'rounded-xl bg-stone-100 p-4 text-stone-600', '沒有符合條件的每日筆記。'));
+        if (!visiblePapers.length) papersList.appendChild(createTextElement('p', 'rounded-xl bg-stone-100 p-4 text-stone-600', '沒有符合條件的論文／消息。'));
+        document.getElementById('notes-count').textContent = `${visibleNotes.length}／${notesData.length} 則筆記`;
+        document.getElementById('papers-count').textContent = `${visiblePapers.length}／${papersData.length} 筆資料`;
+        document.getElementById('filter-status').textContent = `目前顯示 ${visiblePapers.length + visibleNotes.length} 筆資料`;
+      }
+
+      // 將兩份資料中出現過的標籤整理成下拉選單。
+      function populateTagFilter() {
+        const tagFilter = document.getElementById('tag-filter');
+        // 每次儲存筆記後重新建立選項，避免新標籤沒有出現在篩選清單中。
+        tagFilter.replaceChildren(new Option('全部標籤', ''));
+        const tags = new Set([...notesData, ...papersData].flatMap((item) => [...(item.tags || []), ...(item.keywords || [])]));
+        [...tags].sort((a, b) => a.localeCompare(b, 'zh-Hant')).forEach((tag) => {
+          const option = document.createElement('option');
+          option.value = tag;
+          option.textContent = tag;
+          tagFilter.appendChild(option);
+        });
+      }
+
+      // 將指定筆記的現有內容帶入表單，讓使用者修改後儲存。
+      function startEditing(note) {
+        editingNoteId = note.id;
+        document.getElementById('note-title').value = note.title || '';
+        document.getElementById('note-content').value = note.content;
+        document.getElementById('note-department').value = note.department;
+        document.getElementById('note-tags').value = note.tags.join(', ');
+        document.getElementById('note-form-heading').textContent = '編輯筆記';
+        document.getElementById('note-submit').textContent = '儲存修改';
+        document.getElementById('cancel-edit').hidden = false;
+        const status = document.getElementById('note-form-status');
+        status.className = 'text-sm text-teal-800';
+        status.textContent = '正在編輯這則筆記。';
+        document.getElementById('note-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('note-title').focus();
+      }
+
+      // 清空表單，恢復成新增筆記模式。
+      function cancelEditing() {
+        editingNoteId = null;
+        document.getElementById('note-form').reset();
+        document.getElementById('note-form-heading').textContent = '新增今日筆記';
+        document.getElementById('note-submit').textContent = '儲存筆記';
+        document.getElementById('cancel-edit').hidden = true;
+        document.getElementById('note-form-status').textContent = '';
+      }
+
+      // 讀取兩份 JSON 資料並顯示。使用本機伺服器開啟時，瀏覽器才能正常讀取 JSON。
+      async function loadContent() {
+        try {
+          const [notesResponse, papersResponse] = await Promise.all([fetch('notes.json'), fetch('papers.json')]);
+          if (!notesResponse.ok || !papersResponse.ok) throw new Error('找不到資料檔');
+          [notesData, papersData] = await Promise.all([notesResponse.json(), papersResponse.json()]);
+          populateTagFilter();
+          renderContent();
+        } catch (error) {
+          const message = '無法讀取資料。請依 README 的方式用本機伺服器開啟網站。';
+          document.getElementById('notes-list').appendChild(createTextElement('p', 'rounded-xl bg-rose-50 p-4 text-rose-700', message));
+          document.getElementById('papers-list').appendChild(createTextElement('p', 'rounded-xl bg-rose-50 p-4 text-rose-700', message));
+          console.error(error);
+        }
+      }
+
+      // 將新增或修改後的表單資料交給本機工具，並在成功後立刻更新畫面。
+      async function saveNote(event) {
+        event.preventDefault();
+        const status = document.getElementById('note-form-status');
+        // 直接開啟 HTML 檔或使用一般靜態伺服器時，沒有安全的方式可寫回 JSON。
+        if (window.location.protocol === 'file:') {
+          status.className = 'text-sm text-rose-700';
+          status.textContent = '請用 note_editor.py 開啟網站後再儲存筆記。';
+          return;
+        }
+        const form = event.currentTarget;
+        const submitButton = form.querySelector('button[type="submit"]');
+        const data = Object.fromEntries(new FormData(form));
+        submitButton.disabled = true;
+        status.className = 'text-sm text-teal-800';
+        status.textContent = '正在儲存…';
+        try {
+          const response = await fetch(editingNoteId ? `/api/notes/${encodeURIComponent(editingNoteId)}` : '/api/notes', {
+            method: editingNoteId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || '儲存失敗');
+          if (editingNoteId) {
+            notesData = notesData.map((note) => note.id === result.note.id ? result.note : note);
+          } else {
+            notesData.unshift(result.note);
+          }
+          populateTagFilter();
+          renderContent();
+          const wasEditing = Boolean(editingNoteId);
+          cancelEditing();
+          status.className = 'text-sm text-teal-800';
+          status.textContent = wasEditing ? '修改已儲存到 notes.json。' : '已儲存到 notes.json。';
+        } catch (error) {
+          status.className = 'text-sm text-rose-700';
+          status.textContent = `無法儲存：${error.message}`;
+        } finally {
+          submitButton.disabled = false;
+        }
+      }
+
+      // 先向使用者確認，再將這則筆記從 notes.json 與目前畫面移除。
+      async function deleteNote(note) {
+        if (!window.confirm(`確定要刪除「${note.title || '未命名筆記'}」嗎？此動作無法復原。`)) return;
+        const status = document.getElementById('note-form-status');
+        try {
+          const response = await fetch(`/api/notes/${encodeURIComponent(note.id)}`, { method: 'DELETE' });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || '刪除失敗');
+          notesData = notesData.filter((item) => item.id !== note.id);
+          if (editingNoteId === note.id) cancelEditing();
+          populateTagFilter();
+          renderContent();
+          status.className = 'text-sm text-teal-800';
+          status.textContent = '筆記已刪除。';
+        } catch (error) {
+          status.className = 'text-sm text-rose-700';
+          status.textContent = `無法刪除：${error.message}`;
+        }
+      }
+
+      // 使用者每次變更條件時，立即更新畫面，不需要按搜尋按鈕。
+      document.getElementById('search-input').addEventListener('input', renderContent);
+      document.getElementById('department-filter').addEventListener('change', renderContent);
+      document.getElementById('tag-filter').addEventListener('change', renderContent);
+      document.getElementById('note-form').addEventListener('submit', saveNote);
+      document.getElementById('cancel-edit').addEventListener('click', cancelEditing);
+      loadContent();
+    </script>
+  </body>
+</html>

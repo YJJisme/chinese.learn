@@ -1,0 +1,8 @@
+# Python 執行時產生的快取檔，不需要提交到 GitHub。
+__pycache__/
+*.py[cod]
+
+# Windows 與編輯器產生的個人設定或暫存檔。
+Thumbs.db
+Desktop.ini
+.vscode/
