@@ -6,6 +6,14 @@
     <title>中文／國文／台文系每日資訊站</title>
     <!-- Tailwind 的 CDN 版本不需要安裝或建置工具，適合本專案的靜態首頁。 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Analytics 4：記錄匿名的網站瀏覽與互動事件。 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5QMQ7C27YL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-5QMQ7C27YL');
+    </script>
   </head>
   <body class="min-h-screen bg-stone-50 text-stone-800">
     <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -172,6 +180,15 @@
         if (paper.authors.length) card.append(createTextElement('p', 'mt-2 text-sm text-stone-500', paper.authors.join('、')));
         card.append(createTextElement('p', 'mt-3 leading-7 text-stone-600', paper.abstract));
         card.append(createTags(paper.tags));
+        // 有來源網址時才顯示連結；點擊會記錄 paper_card_click 事件。
+        if (paper.url) {
+          const link = createTextElement('a', 'mt-4 inline-block font-bold text-teal-700 underline underline-offset-4 hover:text-teal-900', '查看原始資料');
+          link.href = paper.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.addEventListener('click', () => trackEvent('paper_card_click', { item_type: paper.type, department: paper.department }));
+          card.append(link);
+        }
         return card;
       }
 
@@ -179,6 +196,13 @@
       let notesData = [];
       let papersData = [];
       let editingNoteId = null;
+      let searchTrackingTimer;
+      let searchIsActive = false;
+
+      // 不傳送筆記內容或搜尋文字，避免蒐集個人文字資料。
+      function trackEvent(eventName, parameters = {}) {
+        if (typeof window.gtag === 'function') window.gtag('event', eventName, parameters);
+      }
 
       // 比對資料是否符合目前的搜尋字、領域與標籤條件。
       function matchesFilters(item) {
@@ -291,6 +315,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
+          // GitHub Pages 與一般靜態伺服器沒有筆記 API，通常會回傳 HTML 錯誤頁。
+          // 先檢查回應格式，才能提供容易理解的操作指引。
+          if (!response.headers.get('content-type')?.includes('application/json')) {
+            throw new Error('目前不是本機筆記工具。請在專案資料夾執行「python note_editor.py」，再開啟 http://127.0.0.1:8000。');
+          }
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || '儲存失敗');
           if (editingNoteId) {
@@ -304,6 +333,7 @@
           cancelEditing();
           status.className = 'text-sm text-teal-800';
           status.textContent = wasEditing ? '修改已儲存到 notes.json。' : '已儲存到 notes.json。';
+          trackEvent(wasEditing ? 'note_edited' : 'note_added', { department: result.note.department });
         } catch (error) {
           status.className = 'text-sm text-rose-700';
           status.textContent = `無法儲存：${error.message}`;
@@ -318,6 +348,10 @@
         const status = document.getElementById('note-form-status');
         try {
           const response = await fetch(`/api/notes/${encodeURIComponent(note.id)}`, { method: 'DELETE' });
+          // 避免靜態網站回傳 HTML 時，畫面顯示難懂的 JSON 解析錯誤。
+          if (!response.headers.get('content-type')?.includes('application/json')) {
+            throw new Error('目前不是本機筆記工具。請在專案資料夾執行「python note_editor.py」，再開啟 http://127.0.0.1:8000。');
+          }
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || '刪除失敗');
           notesData = notesData.filter((item) => item.id !== note.id);
@@ -326,6 +360,7 @@
           renderContent();
           status.className = 'text-sm text-teal-800';
           status.textContent = '筆記已刪除。';
+          trackEvent('note_deleted', { department: note.department });
         } catch (error) {
           status.className = 'text-sm text-rose-700';
           status.textContent = `無法刪除：${error.message}`;
@@ -333,8 +368,26 @@
       }
 
       // 使用者每次變更條件時，立即更新畫面，不需要按搜尋按鈕。
-      document.getElementById('search-input').addEventListener('input', renderContent);
-      document.getElementById('department-filter').addEventListener('change', renderContent);
+      document.getElementById('search-input').addEventListener('input', () => {
+        renderContent();
+        clearTimeout(searchTrackingTimer);
+        const hasKeyword = document.getElementById('search-input').value.trim().length > 0;
+        // 每次開始一段新的搜尋時只記錄一次，不會把每個輸入字元都當成事件。
+        if (!hasKeyword) {
+          searchIsActive = false;
+          return;
+        }
+        if (!searchIsActive) {
+          searchTrackingTimer = setTimeout(() => {
+            trackEvent('search_used');
+            searchIsActive = true;
+          }, 600);
+        }
+      });
+      document.getElementById('department-filter').addEventListener('change', () => {
+        renderContent();
+        trackEvent('department_filter', { department: document.getElementById('department-filter').value || 'all' });
+      });
       document.getElementById('tag-filter').addEventListener('change', renderContent);
       document.getElementById('note-form').addEventListener('submit', saveNote);
       document.getElementById('cancel-edit').addEventListener('click', cancelEditing);
