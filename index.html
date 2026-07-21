@@ -239,6 +239,7 @@
       // 將兩份資料中出現過的標籤整理成下拉選單。
       function populateTagFilter() {
         const tagFilter = document.getElementById('tag-filter');
+        const selectedValue = tagFilter.value;
         // 每次儲存筆記後重新建立選項，避免新標籤沒有出現在篩選清單中。
         tagFilter.replaceChildren(new Option('全部標籤', ''));
         const tags = new Set([...notesData, ...papersData].flatMap((item) => [...(item.tags || []), ...(item.keywords || [])]));
@@ -248,6 +249,9 @@
           option.textContent = tag;
           tagFilter.appendChild(option);
         });
+        if (tags.has(selectedValue)) {
+          tagFilter.value = selectedValue;
+        }
       }
 
       // 將指定筆記的現有內容帶入表單，讓使用者修改後儲存。

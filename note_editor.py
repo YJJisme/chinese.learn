@@ -118,7 +118,8 @@ class NoteEditorHandler(SimpleHTTPRequestHandler):
         title = str(payload.get("title", "")).strip()
         content = str(payload.get("content", "")).strip()
         department = str(payload.get("department", "")).strip()
-        tags = [tag.strip() for tag in str(payload.get("tags", "")).split(",") if tag.strip()]
+        tags_raw = str(payload.get("tags", ""))
+        tags = [tag.strip() for tag in tags_raw.replace("，", ",").split(",") if tag.strip()]
         if not content:
             raise ValueError("請填寫筆記內容。")
         if department not in ALLOWED_DEPARTMENTS:

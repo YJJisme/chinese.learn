@@ -1,12 +1,11 @@
-"""國文系起始來源：國立臺灣師範大學國文學系公告 RSS。"""
+"""國文系論文來源：Crossref 的古典中文文學論文書目。"""
 
-from _common import fetch_rss_items
+from _common import fetch_crossref_works
 
 
-SOURCE_NAME = "國立臺灣師範大學國文學系"
-RSS_URL = "https://www.chinese.ntnu.edu.tw/?feed=rss2"
+QUERY = "classical Chinese literature"
 
 
 def collect():
-    """回傳最新國文系公告，並統一標示為國文系。"""
-    return fetch_rss_items(RSS_URL, department="國文系", source_name=SOURCE_NAME)
+    """回傳最新古典中文文學論文，並統一標示為國文系。"""
+    return fetch_crossref_works(QUERY, department="國文系")

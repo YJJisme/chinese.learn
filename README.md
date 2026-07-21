@@ -10,7 +10,7 @@
 - `note_editor.py`：本機筆記工具；提供網站並讓新增筆記表單能安全寫入 `notes.json`。
 - `.gitignore`：排除 Python 快取與個人編輯器設定，避免不必要的檔案被提交。
 - `crawler/main.py`：自動掃描並執行所有來源，將新資料合併到 `papers.json`。
-- `crawler/sources/`：各來源各自一個檔案；新增來源時不用修改 `main.py`。
+- `crawler/sources/`：各來源各自一個檔案；三個 Crossref 論文來源對應中文、國文、台文，另保留臺文館消息來源；新增來源時不用修改 `main.py`。
 
 ## GA4 追蹤
 
@@ -41,7 +41,7 @@ python note_editor.py
 python crawler/main.py
 ```
 
-程式會依序執行 `crawler/sources/` 內的三個來源，並只把尚未出現的新項目加到 `papers.json`。單一來源暫時無法連線時，程式會顯示原因並保留既有資料，其他來源仍會繼續執行。
+程式會依序執行 `crawler/sources/` 內的所有來源，並只把尚未出現的新項目加到 `papers.json`。三個 Crossref 來源會帶入論文標題、作者、期刊、DOI 與出版日期；臺文館來源則補充學術消息。單一來源暫時無法連線時，程式會顯示原因並保留既有資料，其他來源仍會繼續執行。部分官方公告頁沒有統一的公開日期欄位，這類資料會以擷取當日作為顯示日期，但仍以原始網址正確去重。
 
 ## 如何測試
 
