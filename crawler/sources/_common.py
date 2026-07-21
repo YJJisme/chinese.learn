@@ -295,11 +295,17 @@ def _normalise_date(raw_date):
 
 
 def _crossref_date(work):
-    """讀取 Crossref 最可靠的日期欄位，轉成 YYYY-MM-DD。"""
-    for field in ("published", "published-online", "published-print", "issued", "created"):
+    """讀取 Crossref 最可靠的日期欄位，轉成 YYYY-MM-DD。
+    針對未來年份進行容錯，若大於當前年份則嘗試其他欄位（如 created/deposited）。
+    """
+    current_year = datetime.now().year
+    for field in ("published", "published-online", "published-print", "issued", "created", "deposited"):
         parts = work.get(field, {}).get("date-parts", [[]])[0]
         if parts:
             year = parts[0]
+            # 容錯：若年份在遙遠的未來（大於當前年份 + 1）或不合理過去，則跳過該欄位嘗試其他欄位
+            if year > current_year + 1 or year < 1900:
+                continue
             month = parts[1] if len(parts) > 1 else 1
             day = parts[2] if len(parts) > 2 else 1
             return f"{year:04d}-{month:02d}-{day:02d}"

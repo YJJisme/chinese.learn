@@ -18,17 +18,29 @@
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignal.public.js" defer></script>
     <script>
       window.OneSignal = window.OneSignal || [];
-      OneSignal.push(function() {
-        OneSignal.init({
-          appId: "YOUR_ONESIGNAL_APP_ID", // 請替換為您的 OneSignal App ID
-          notifyButton: {
-            enable: true, // 在首頁右下角顯示小鈴鐺按鈕，方便訪客自由開啟或關閉訂閱
-            size: 'medium',
-            theme: 'default',
-            position: 'bottom-right'
-          },
+      const ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"; // 請在此替換為您的 OneSignal App ID
+
+      if (ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== "YOUR_ONESIGNAL_APP_ID") {
+        OneSignal.push(function() {
+          OneSignal.init({
+            appId: ONESIGNAL_APP_ID,
+            notifyButton: {
+              enable: true,
+              size: 'medium',
+              theme: 'default',
+              position: 'bottom-right'
+            },
+          });
         });
-      });
+      } else {
+        console.warn("OneSignal: App ID 未設定或維持預設預留字，已停用推播小鈴鐺。");
+        window.addEventListener('DOMContentLoaded', () => {
+          const warningBanner = document.getElementById('onesignal-warning-banner');
+          if (warningBanner) {
+            warningBanner.classList.remove('hidden');
+          }
+        });
+      }
     </script>
   </head>
   <body class="min-h-screen bg-stone-50 text-stone-800">
@@ -38,6 +50,10 @@
         <p class="mb-2 text-sm font-medium tracking-widest text-teal-700">DAILY STUDY NOTES</p>
         <h1 class="text-3xl font-bold tracking-tight text-stone-900 sm:text-4xl">中文／國文／台文系每日資訊站</h1>
         <p class="mt-3 max-w-2xl leading-7 text-stone-600">記下每天的閱讀與想法，也累積值得回看的論文、活動與新書資訊。</p>
+        <!-- OneSignal 未設定時的提示橫幅 -->
+        <div id="onesignal-warning-banner" class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          💡 <strong>Web Push 通知提示：</strong> 偵測到本機尚未在 <code>index.html</code> 中設定真實的 OneSignal <code>appId</code>，因此右下角的小鈴鐺圖示暫時不會顯示。當您替換為真實 App ID 並部署到支援 HTTPS 的環境後，訂閱按鈕即會自動載入！
+        </div>
       </header>
 
       <!-- 搜尋與篩選會同時套用到論文／消息和每日筆記。 -->
