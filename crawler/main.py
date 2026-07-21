@@ -1,9 +1,4 @@
-"""自動執行 crawler/sources 中的所有來源，並合併寫入 papers.json。
-
-新增來源時，只要在 sources 資料夾建立一個含 collect() 函式的 .py 檔，
-不需要修改這個主程式。
-"""
-
+from datetime import datetime
 import importlib.util
 import json
 import sys
@@ -47,8 +42,18 @@ def load_existing_papers():
 
 
 def item_key(item):
-    """以來源網址優先去重；沒有網址時以來源、標題與日期組合辨識。"""
-    return item.get("url") or "|".join([item.get("source", ""), item.get("title", ""), item.get("date", "")])
+    """
+    用 url 欄位作為唯一識別依據；
+    如果沒有 url，退而用「標題 + 期刊/來源 + 年份」組合當作識別。
+    """
+    url = item.get("url", "").strip()
+    if url:
+        return url
+
+    title = item.get("title", "").strip()
+    source = item.get("journal", "").strip() or item.get("source", "").strip()
+    year = str(item.get("year", "")).strip()
+    return f"{title}|{source}|{year}"
 
 
 def validate_item(item):
@@ -60,31 +65,68 @@ def validate_item(item):
         raise ValueError("department 必須是中文系、國文系或台文系。")
 
 
+def merge_updates(existing, scraped):
+    """將抓到的新內容合併至現有項目中，如果有更有價值的新增欄位，回傳 True 表示有更新。"""
+    updated = False
+    fields_to_check = ["title", "authors", "type", "department", "journal", "volume", "issue", "year", "date", "keywords", "tags", "abstract", "url", "pdf", "doi", "source"]
+    for field in fields_to_check:
+        new_val = scraped.get(field)
+        old_val = existing.get(field)
+
+        if new_val:
+            if isinstance(new_val, str):
+                old_str = old_val or ""
+                if new_val.strip() != old_str.strip() and len(new_val.strip()) > len(old_str.strip()):
+                    existing[field] = new_val
+                    updated = True
+            elif isinstance(new_val, list):
+                old_list = old_val or []
+                if len(new_val) > len(old_list):
+                    existing[field] = new_val
+                    updated = True
+            else:
+                if new_val != old_val:
+                    existing[field] = new_val
+                    updated = True
+    return updated
+
+
 def run():
-    """執行所有來源，保留舊資料並只加入尚未存在的新項目。"""
+    """執行所有來源，保留舊資料、更新內容，並只加入尚未存在的新項目。"""
     papers = load_existing_papers()
-    known_keys = {item_key(item) for item in papers}
+    papers_map = {item_key(item): item for item in papers}
     new_items = []
+    updated_any = False
+    today = datetime.now().date().isoformat()
 
     for source_name, collect in discover_sources():
         try:
             source_items = collect()
             added_count = 0
+            updated_count = 0
             for item in source_items:
                 validate_item(item)
                 key = item_key(item)
-                if key not in known_keys:
+                if key not in papers_map:
+                    # 這是全新項目，加上 first_seen 欄位
+                    item["first_seen"] = today
                     new_items.append(item)
-                    known_keys.add(key)
+                    papers_map[key] = item
                     added_count += 1
-            print(f"{source_name}：讀取 {len(source_items)} 筆，新增 {added_count} 筆。")
+                else:
+                    # 項目已存在，檢查是否需要合併更新內容（保留原 first_seen）
+                    if merge_updates(papers_map[key], item):
+                        updated_count += 1
+                        updated_any = True
+            print(f"{source_name}：讀取 {len(source_items)} 筆，新增 {added_count} 筆，更新 {updated_count} 筆。")
         except Exception as error:  # 單一來源失敗不應阻止其他來源更新。
             print(f"{source_name}：略過，原因：{error}")
 
-    if new_items:
-        # 最新抓取的資料優先顯示，既有資料與手動測試資料都會保留。
-        PAPERS_FILE.write_text(json.dumps(new_items + papers, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"完成：共新增 {len(new_items)} 筆資料。")
+    if new_items or updated_any:
+        # 最新抓取的全新資料排在最前面，舊有資料順序保留（已在 papers 串列中就地修改）
+        all_papers = new_items + papers
+        PAPERS_FILE.write_text(json.dumps(all_papers, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"完成：共新增 {len(new_items)} 筆，有更新既有項目：{updated_any}。")
 
 
 if __name__ == "__main__":
