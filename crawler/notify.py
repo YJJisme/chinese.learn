@@ -7,6 +7,8 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import urllib.error
+import urllib.request
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 PAPERS_FILE = PROJECT_DIRECTORY / "papers.json"
@@ -49,6 +51,7 @@ def main():
     # 發送 Web Push 推播
     app_id = os.environ.get("ONESIGNAL_APP_ID")
     api_key = os.environ.get("ONESIGNAL_REST_API_KEY")
+    site_url = os.environ.get("SITE_URL", "https://yjjisme.github.io/chinese.learn/")
 
     if not app_id or not api_key:
         print("未偵測到 OneSignal 金鑰 (ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY)，跳過 API 發送。")
@@ -57,7 +60,34 @@ def main():
         return
 
     print("正在呼叫 OneSignal API 發送推播...")
-    # 未來階段整合 OneSignal REST API 呼叫
+
+    # 發送通知至 OneSignal REST API
+    url = "https://onesignal.com/api/v1/notifications"
+    payload = {
+        "app_id": app_id,
+        "included_segments": ["Subscribed Users"],
+        "contents": {"en": message_content, "zh-Hant": message_content},
+        "headings": {"en": message_title, "zh-Hant": message_title},
+        "url": site_url,
+    }
+
+    json_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=json_data, method="POST")
+    req.add_header("Authorization", f"Basic {api_key}")
+    req.add_header("Content-Type", "application/json; charset=utf-8")
+
+    try:
+        import ssl
+
+        ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=20) as response:
+            result = response.read().decode("utf-8")
+            print("OneSignal 推播成功！回應：", result)
+    except urllib.error.HTTPError as e:
+        error_info = e.read().decode("utf-8")
+        print(f"OneSignal 發送失敗：HTTP {e.code} - {error_info}")
+    except Exception as e:
+        print(f"OneSignal 發送異常：{e}")
 
 
 if __name__ == "__main__":
