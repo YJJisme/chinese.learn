@@ -1,9 +1,12 @@
-from datetime import datetime
 import importlib.util
 import json
+import os
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
-
+import urllib.error
+import urllib.request
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 SOURCES_DIRECTORY = Path(__file__).resolve().parent / "sources"
@@ -65,6 +68,72 @@ def validate_item(item):
         raise ValueError("department 必須是中文系、國文系或台文系。")
 
 
+def generate_ai_summary(item):
+    """呼叫 Gemini API 將論文摘要翻譯並改寫成結構化三點摘要。"""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    title = item.get("title", "")
+    abstract = item.get("abstract", "")
+    if not abstract:
+        return None
+
+    print(f"正在為「{title[:20]}...」生成 AI 摘要...")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+
+    prompt = (
+        "你是一個專業的中文/漢學/歷史與文學學術助手。請將以下學術論文的摘要（通常是英文）翻譯並精簡改寫為繁體中文（zh-Hant）的結構化三點摘要。\n"
+        "請嚴格使用 JSON 格式輸出，且必須包含以下三個 Key，若欄位內無足夠資訊，請根據論文標題與上下文進行合理且學術性的推論，不可留空：\n"
+        "1. \"purpose\": 用一句話精準說明此研究的「研究目的與探討核心」\n"
+        "2. \"method\": 用一句話說明此研究採用的「研究方法、分析對象或文獻範疇」\n"
+        "3. \"result\": 用一句話總結此研究的「主要發現、關鍵推論或學術價值」\n\n"
+        f"論文標題：{title}\n"
+        f"摘要原文：{abstract}\n"
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json"
+        }
+    }
+
+    json_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=json_data, method="POST")
+    req.add_header("Content-Type", "application/json")
+
+    # 配合 Free Tier 速率限制，每次呼叫前後稍作停頓
+    time.sleep(2.0)
+
+    try:
+        import ssl
+
+        ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            candidates = res_data.get("candidates", [])
+            if candidates:
+                text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if text_content:
+                    ai_json = json.loads(text_content)
+                    return {
+                        "purpose": str(ai_json.get("purpose", "")).strip(),
+                        "method": str(ai_json.get("method", "")).strip(),
+                        "result": str(ai_json.get("result", "")).strip(),
+                    }
+    except Exception as e:
+        print(f"生成 AI 摘要失敗：{e}")
+        if isinstance(e, urllib.error.HTTPError):
+            print("Gemini API 回應錯誤：", e.read().decode("utf-8", errors="replace"))
+    return None
+
+
 def merge_updates(existing, scraped):
     """將抓到的新內容合併至現有項目中，如果有更有價值的新增欄位，回傳 True 表示有更新。"""
     updated = False
@@ -98,6 +167,10 @@ def run():
     new_items = []
     updated_any = False
     today = datetime.now().date().isoformat()
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    if not api_key:
+        print("未偵測到 GEMINI_API_KEY 環境變數，將跳過 AI 摘要生成。")
 
     for source_name, collect in discover_sources():
         try:
@@ -110,14 +183,29 @@ def run():
                 if key not in papers_map:
                     # 這是全新項目，加上 first_seen 欄位
                     item["first_seen"] = today
+                    # 如果是論文且有摘要，且設定了 API KEY，生成 AI 摘要
+                    if api_key and item.get("type") == "paper" and item.get("abstract"):
+                        ai_sum = generate_ai_summary(item)
+                        if ai_sum:
+                            item["ai_summary"] = ai_sum
                     new_items.append(item)
                     papers_map[key] = item
                     added_count += 1
                 else:
                     # 項目已存在，檢查是否需要合併更新內容（保留原 first_seen）
-                    if merge_updates(papers_map[key], item):
+                    existing_item = papers_map[key]
+                    if merge_updates(existing_item, item):
                         updated_count += 1
                         updated_any = True
+
+                    # 補發 AI 摘要：若原資料是論文、有摘要、但還沒有 AI 摘要，且金鑰存在
+                    if api_key and existing_item.get("type") == "paper" and existing_item.get("abstract") and not existing_item.get("ai_summary"):
+                        ai_sum = generate_ai_summary(existing_item)
+                        if ai_sum:
+                            existing_item["ai_summary"] = ai_sum
+                            updated_any = True
+                            updated_count += 1
+
             print(f"{source_name}：讀取 {len(source_items)} 筆，新增 {added_count} 筆，更新 {updated_count} 筆。")
         except Exception as error:  # 單一來源失敗不應阻止其他來源更新。
             print(f"{source_name}：略過，原因：{error}")

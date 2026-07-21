@@ -210,7 +210,43 @@
         meta.append(createTextElement('span', `rounded-full px-2.5 py-1 text-xs font-bold ${departmentClass(paper.department)}`, paper.department));
         card.append(meta, createTextElement('h3', 'text-lg font-bold text-stone-900', paper.title));
         if (paper.authors.length) card.append(createTextElement('p', 'mt-2 text-sm text-stone-500', paper.authors.join('、')));
-        card.append(createTextElement('p', 'mt-3 leading-7 text-stone-600', paper.abstract));
+
+        if (paper.ai_summary) {
+          const aiContainer = document.createElement('div');
+          aiContainer.className = 'mt-3 rounded-xl bg-indigo-50 border border-indigo-100 p-4 text-sm leading-6';
+
+          const aiTitle = document.createElement('h4');
+          aiTitle.className = 'flex items-center gap-1.5 font-bold text-indigo-950 mb-2';
+          aiTitle.innerHTML = '✨ AI 論文核心摘要';
+          aiContainer.appendChild(aiTitle);
+
+          const ul = document.createElement('ul');
+          ul.className = 'space-y-1.5 text-indigo-900';
+
+          const purposeLi = document.createElement('li');
+          purposeLi.innerHTML = `<strong>🎯 研究目的：</strong>${paper.ai_summary.purpose}`;
+          const methodLi = document.createElement('li');
+          methodLi.innerHTML = `<strong>🛠️ 研究方法：</strong>${paper.ai_summary.method}`;
+          const resultLi = document.createElement('li');
+          resultLi.innerHTML = `<strong>🏆 關鍵結果：</strong>${paper.ai_summary.result}`;
+
+          ul.append(purposeLi, methodLi, resultLi);
+          aiContainer.appendChild(ul);
+          card.append(aiContainer);
+
+          if (paper.abstract) {
+            const details = document.createElement('details');
+            details.className = 'mt-3 text-sm text-stone-500 cursor-pointer';
+            const summary = document.createElement('summary');
+            summary.className = 'outline-none select-none text-stone-600 hover:text-stone-905 font-medium';
+            summary.textContent = '查看原文摘要';
+            details.append(summary, createTextElement('p', 'mt-2 leading-6 text-stone-500 pl-4 border-l-2 border-stone-200', paper.abstract));
+            card.append(details);
+          }
+        } else {
+          if (paper.abstract) card.append(createTextElement('p', 'mt-3 leading-7 text-stone-600', paper.abstract));
+        }
+
         card.append(createTags(paper.tags));
         // 有來源網址時才顯示連結；點擊會記錄 paper_card_click 事件。
         if (paper.url) {
