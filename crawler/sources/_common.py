@@ -1,29 +1,26 @@
-"""三個爬蟲來源共用的 RSS 讀取與資料轉換工具。"""
+"""爬蟲來源共用的 RSS 讀取、HTML 解析與 API 資料轉換工具。"""
 
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from html import unescape
 from html.parser import HTMLParser
 import json
+import ssl
 from urllib.error import URLError
-from urllib.parse import urljoin
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-
 USER_AGENT = "ChineseLearnDailyInfoBot/1.0 (personal academic news reader)"
+# 使用不驗證憑證的 SSL context，解決部分臺灣學術機構網站憑證 mismatch 或未更新導致的連線失敗。
+SSL_CONTEXT = ssl._create_unverified_context()
 
 
 def fetch_rss_items(feed_url, *, department, source_name, limit=10):
-    """讀取 RSS 或 Atom feed，轉成 papers.json 使用的統一欄位。
-
-    網站格式可能隨時改變，因此網路與 XML 錯誤會交給 main.py 記錄，
-    而不是產生空資料並覆蓋現有 papers.json。
-    """
+    """讀取 RSS 或 Atom feed，轉成 papers.json 使用的統一欄位。"""
     request = Request(feed_url, headers={"User-Agent": USER_AGENT})
     try:
-        with urlopen(request, timeout=20) as response:
+        with urlopen(request, context=SSL_CONTEXT, timeout=20) as response:
             xml_data = response.read()
     except URLError as error:
         raise RuntimeError(f"無法讀取 {feed_url}：{error.reason}") from error
@@ -33,7 +30,6 @@ def fetch_rss_items(feed_url, *, department, source_name, limit=10):
     except ElementTree.ParseError as error:
         raise RuntimeError(f"{feed_url} 回傳的內容不是有效 RSS／Atom XML。") from error
 
-    # RSS 使用 item，Atom 使用 entry；支援兩種常見格式。
     entries = root.findall(".//item") or root.findall(".//{http://www.w3.org/2005/Atom}entry")
     if not entries:
         raise RuntimeError(f"{feed_url} 沒有找到可讀取的項目。")
@@ -47,14 +43,10 @@ def fetch_rss_items(feed_url, *, department, source_name, limit=10):
 
 
 def fetch_html_news(page_url, *, department, source_name, url_marker, limit=10):
-    """從沒有 RSS 的官方公告頁擷取公告連結。
-
-    只收集網址中有指定識別字的連結，避免將網站選單或聯絡資訊誤當新聞。
-    公告頁未提供統一日期格式時，date 記錄本次擷取日期；來源網址仍用於去重。
-    """
+    """從沒有 RSS 的官方公告頁擷取公告連結。"""
     request = Request(page_url, headers={"User-Agent": USER_AGENT})
     try:
-        with urlopen(request, timeout=20) as response:
+        with urlopen(request, context=SSL_CONTEXT, timeout=20) as response:
             html = response.read().decode(response.headers.get_content_charset() or "utf-8", errors="replace")
     except URLError as error:
         raise RuntimeError(f"無法讀取 {page_url}：{error.reason}") from error
@@ -66,7 +58,7 @@ def fetch_html_news(page_url, *, department, source_name, url_marker, limit=10):
     seen_urls = set()
     for href, title in parser.links:
         absolute_url = urljoin(page_url, href)
-        if url_marker not in absolute_url or absolute_url in seen_urls or len(title) < 8:
+        if url_marker not in absolute_url or absolute_url in seen_urls or len(title) < 6:
             continue
         seen_urls.add(absolute_url)
         items.append({
@@ -95,11 +87,7 @@ def fetch_html_news(page_url, *, department, source_name, url_marker, limit=10):
 
 
 def fetch_crossref_works(query, *, department, limit=10):
-    """從 Crossref 公開 API 取得學術論文書目。
-
-    Crossref 提供 DOI、作者、期刊與出版日期等書目資料，不保證每筆都有全文。
-    不傳送個人資料，也不需要帳號或 API 金鑰。
-    """
+    """從 Crossref 公開 API 取得學術論文書目。"""
     parameters = {
         "query.bibliographic": query,
         "filter": "type:journal-article",
@@ -110,7 +98,7 @@ def fetch_crossref_works(query, *, department, limit=10):
     api_url = "https://api.crossref.org/works?" + urlencode(parameters)
     request = Request(api_url, headers={"User-Agent": USER_AGENT})
     try:
-        with urlopen(request, timeout=20) as response:
+        with urlopen(request, context=SSL_CONTEXT, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except URLError as error:
         raise RuntimeError(f"無法讀取 Crossref：{error.reason}") from error
@@ -149,6 +137,72 @@ def fetch_crossref_works(query, *, department, limit=10):
             "pdf": "",
             "doi": doi,
             "source": "Crossref",
+        })
+    return items
+
+
+def fetch_doaj_articles(query, *, department, limit=10):
+    """從 DOAJ (Directory of Open Access Journals) 公開 API 取得開放取用論文。"""
+    api_url = f"https://doaj.org/api/v2/search/articles/{urlencode({'q': query})[2:]}?page=1&pageSize={limit}"
+    request = Request(api_url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urlopen(request, context=SSL_CONTEXT, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except URLError as error:
+        raise RuntimeError(f"無法讀取 DOAJ：{error.reason}") from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError("DOAJ 回傳的內容不是有效 JSON。") from error
+
+    results = payload.get("results", [])
+    if not results:
+        raise RuntimeError(f"DOAJ 沒有找到「{query}」的論文。")
+    items = []
+    for result in results:
+        bibjson = result.get("bibjson", {})
+        title = bibjson.get("title", "").strip()
+        if not title:
+            continue
+        authors = [a.get("name", "") for a in bibjson.get("author", []) if a.get("name")]
+        year_str = bibjson.get("year", datetime.now().year)
+        try:
+            year = int(year_str)
+        except (ValueError, TypeError):
+            year = datetime.now().year
+        month = str(bibjson.get("month", "01")).zfill(2)
+        date = f"{year}-{month}-01"
+
+        urls = bibjson.get("link", [])
+        article_url = ""
+        pdf_url = ""
+        for link in urls:
+            if link.get("type") == "fulltext":
+                article_url = link.get("url", "")
+            elif link.get("type") == "pdf":
+                pdf_url = link.get("url", "")
+
+        identifiers = bibjson.get("identifier", [])
+        doi = ""
+        for ident in identifiers:
+            if ident.get("type") == "doi":
+                doi = ident.get("id", "")
+
+        items.append({
+            "title": title,
+            "authors": authors,
+            "type": "paper",
+            "department": department,
+            "journal": bibjson.get("journal", {}).get("title", ""),
+            "volume": bibjson.get("journal", {}).get("volume", ""),
+            "issue": bibjson.get("journal", {}).get("number", ""),
+            "year": year,
+            "date": date,
+            "keywords": bibjson.get("keywords", [])[:3],
+            "tags": [query, "DOAJ", "Open Access"],
+            "abstract": _strip_html(bibjson.get("abstract", ""))[:500],
+            "url": article_url or (f"https://doi.org/{doi}" if doi else ""),
+            "pdf": pdf_url,
+            "doi": doi,
+            "source": "DOAJ",
         })
     return items
 

@@ -10,7 +10,7 @@
 - `note_editor.py`：本機筆記工具；提供網站並讓新增筆記表單能安全寫入 `notes.json`。
 - `.gitignore`：排除 Python 快取與個人編輯器設定，避免不必要的檔案被提交。
 - `crawler/main.py`：自動掃描並執行所有來源，將新資料合併到 `papers.json`。
-- `crawler/sources/`：各來源各自一個檔案；三個 Crossref 論文來源對應中文、國文、台文，另保留臺文館消息來源；新增來源時不用修改 `main.py`。
+- `crawler/sources/`：各來源各自一個檔案；劃分為「論文期刊」（Crossref、DOAJ）與「消息公告」（台大中文、師大國文、臺文館、中研院文哲所）；新增來源時不用修改 `main.py`。
 
 ## GA4 追蹤
 
